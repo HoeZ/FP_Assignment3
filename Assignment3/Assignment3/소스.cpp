@@ -61,18 +61,74 @@ typedef struct professor_block
 	Professors records[BLOCKSIZE / sizeof(Professors)];
 }ProfessorBlock;
 
-
 typedef struct _hashMap {
 	int key;
 	int tableNum;
 
 }HashMap;
 
+typedef struct LEAF_NODE
+{
+	float key[DEGREE];
+	int data[DEGREE];
+	struct NODE *next;
+}LeafNode;
+
+typedef struct INDEX_NODE
+{
+	float key[DEGREE - 1];
+	struct NODE *pointer[DEGREE];
+}IndexNode;
+
+typedef struct NODE
+{
+	int type;
+	int full;
+	struct NODE *parent;
+	union
+	{
+		LeafNode leafNode;
+		IndexNode indexNode;
+	}node;
+}Node;
+
+typedef struct
+{
+	int key;
+	int tableNum;
+}IndexMap;
 
 int studentCnt, professorCnt;
 
 StudentBlock *readStudentBlocks, *writeStudentBlocks;
 ProfessorBlock *readProfessorBlocks, *writeProfessorBlocks;
+
+int numOfStudentRecords = BLOCKSIZE / sizeof(Students);
+int numOfProfessorRecords = BLOCKSIZE / sizeof(Professors);
+
+Node * studentRoot;
+Node * professorRoot;
+Node * Stack[MAX];
+int StackPoint;
+
+void initBPlusTree(Node*& node);
+
+void initStack();
+Node * getStack();
+void addStack(Node *thisNode);
+Node * FindKey(float AddKey, int inverse, Node *thisNode);
+
+void InsertKey(float key, int data, Node *root);
+void InsertKey1(float insertKey, int insertData, Node *thisNode, Node *root);
+void InsertKey2(float insertKey, int insertData, Node *thisNode, Node *root);
+void InsertKey3(Node *preNode, Node *nextNode, float addkey, Node *thisNode, Node *root);
+void InsertKey4(Node *preNode, Node *nextNode, float addkey, Node *thisNode, Node *root);
+
+void SelectKey(float selectKey);
+
+void traverse(Node*& root);
+void traverse(Node*& p, int depth);
+
 
 class Bucket {
 
@@ -167,7 +223,6 @@ public:
 		fwrite((void*)hashMap, sizeof(HashMap), this->gethashTableize(), fout);
 		return 0;
 	}
-
 };
 
 
@@ -261,7 +316,6 @@ public:
 		return s;
 	}
 
-
 	Directory(int size) {
 		this->hashPrefix = 0;
 		for (int i = 0; i < 1 << this->hashPrefix; i++) {
@@ -310,76 +364,7 @@ public:
 			buckets[i]->writeHashFile(fout);
 		return 0;
 	}
-
 };
-
-
-
-typedef struct LEAF_NODE
-{
-	float key[DEGREE];
-	int data[DEGREE];
-	struct NODE *next;
-}LeafNode;
-
-typedef struct INDEX_NODE
-{
-	float key[DEGREE - 1];
-	struct NODE *pointer[DEGREE];
-}IndexNode;
-
-typedef struct NODE
-{
-	int type;
-	int full;
-	struct NODE *parent;
-	union
-	{
-		LeafNode leafNode;
-		IndexNode indexNode;
-	}node;
-}Node;
-
-typedef struct
-{
-	int key;
-	int tableNum;
-}IndexMap;
-
-
-int numOfStudentRecords = BLOCKSIZE / sizeof(Students);
-int numOfProfessorRecords = BLOCKSIZE / sizeof(Professors);
-
-
-
-Node * studentRoot;
-Node * professorRoot;
-Node * Stack[MAX];
-int StackPoint;
-
-void initBPlusTree(Node*& node);
-
-void initStack();
-Node * getStack();
-void addStack(Node *thisNode);
-// void Free(Node *thisNode);
-Node * FindKey(float AddKey, int inverse, Node *thisNode);
-
-void InsertKey(float key, int data, Node *root);
-void InsertKey1(float insertKey, int insertData, Node *thisNode, Node *root);
-void InsertKey2(float insertKey, int insertData, Node *thisNode, Node *root);
-void InsertKey3(Node *preNode, Node *nextNode, float addkey, Node *thisNode, Node *root);
-void InsertKey4(Node *preNode, Node *nextNode, float addkey, Node *thisNode, Node *root);
-
-void DeleteKey(float deleteKey);
-void DeleteKey1(Node *thisNode);
-void DeleteKey2(Node *thisNode);
-
-void SelectKey(float selectKey);
-
-void traverse(Node*& root);
-void traverse(Node*& p, int depth);
-
 
 
 void readStudentHashFile(HashMap*& readStudentHashMap, int count) {
@@ -392,7 +377,6 @@ void readStudentHashFile(HashMap*& readStudentHashMap, int count) {
 	for (int j = 0; j < count; j++) {
 		cout << readStudentHashMap[j].key << " " << readStudentHashMap[j].tableNum << endl;
 	}
-
 }
 
 void readProfessorHashFile(HashMap*& readProfessorHashMap, int count) {
@@ -405,8 +389,8 @@ void readProfessorHashFile(HashMap*& readProfessorHashMap, int count) {
 	for (int j = 0; j < count; j++) {
 		cout << readProfessorHashMap[j].key << " " << readProfessorHashMap[j].tableNum << endl;
 	}
-
 }
+
 
 void readStudentIndexFile(Node*& score, int count) {
 
@@ -415,12 +399,11 @@ void readStudentIndexFile(Node*& score, int count) {
 	fread((void*)score, sizeof(Node), count, readIdx);
 	/*
 	for (int j = 0; j < count; j++) {
-
 	//cout << score->node.leafNode.key[j] << endl;
 	}*/
 	traverse(score);
-
 }
+
 
 void readProfessorIndexFile(Node*& salary, int count) {
 
@@ -436,25 +419,21 @@ void readProfessorIndexFile(Node*& salary, int count) {
 }
 
 
-
 void insertStudentDB(StudentBlock*& blocks, int count) {
 	//insert hashTable into DB as binary format
 	FILE * DBFile = fopen("Students.DB", "wb");
 	fseek(DBFile, 0, SEEK_SET);
-	int j = fwrite((char*)blocks, sizeof(StudentBlock), count / numOfStudentRecords + 1, DBFile);
+	fwrite(blocks, sizeof(StudentBlock), count / numOfStudentRecords + 1, DBFile);
 }
+
 
 void insertProfessorDB(ProfessorBlock*& blocks, int count) {
 
 	//insert hashTable into DB as binary format
 	FILE * DBFile = fopen("Professors.DB", "wb");
 	fseek(DBFile, 0, SEEK_SET);
-	int k = fwrite((char*)blocks, sizeof(ProfessorBlock), count / numOfProfessorRecords + 2, DBFile);
+	fwrite(blocks, sizeof(ProfessorBlock), count / numOfProfessorRecords + 2, DBFile);
 }
-
-
-
-
 
 
 int getStudentData(StudentBlock*& blocks, string input_str) {
@@ -499,6 +478,7 @@ int getStudentData(StudentBlock*& blocks, string input_str) {
 	return count;
 }
 
+
 int getProfessorData(ProfessorBlock*& blocks, string input_str) {
 
 	//Get input data from .csv
@@ -539,6 +519,7 @@ int getProfessorData(ProfessorBlock*& blocks, string input_str) {
 	return count;
 }
 
+
 int writeStudentIndexFile(FILE *& fout)
 {
 	fseek(fout, 0, SEEK_SET);
@@ -558,6 +539,7 @@ int writeStudentIndexFile(FILE *& fout)
 	}
 	return 0;
 }
+
 
 int writeProfessorIndexFile(FILE *& fout)
 {
@@ -580,21 +562,21 @@ int writeProfessorIndexFile(FILE *& fout)
 }
 
 
+/*------------------------------------------------------------------------------------------------------------------------------------*/
+/*                                                   Exact Match Serch                                                                */
+/*------------------------------------------------------------------------------------------------------------------------------------*/
 
-
-//해시파일
 void exactSearch(Directory directory, int key, int hashMapSize, string type) {
 
 	map<int, int>::iterator it;
 	int bucketNum = directory.hash(key);
 
-
 	map<int, int> hashTable = directory.buckets[bucketNum]->hashTable;
 	it = hashTable.find(key);
+	FILE * fout = fopen("query.res", "a");
 
 	if (it != hashTable.end()) // 찾았을 경우
 	{
-
 		printf("%d %d\n", it->first, it->second);
 		FILE * fin;
 		if (type == "Students") {
@@ -604,13 +586,11 @@ void exactSearch(Directory directory, int key, int hashMapSize, string type) {
 				for (int i = 0; i < numOfStudentRecords; i++) {
 
 					if (readStudentBlocks[j].records[i].studentID == it->first) {
-						cout << readStudentBlocks[j].records[i].name << " " << readStudentBlocks[j].records[i].studentID << " "
-							<< readStudentBlocks[j].records[i].score << " " << readStudentBlocks[j].records[i].advisorID << endl;
+						cout << readStudentBlocks[j].records[i].name << " " << readStudentBlocks[j].records[i].studentID << " " << readStudentBlocks[j].records[i].score << " " << readStudentBlocks[j].records[i].advisorID << endl;
+						fprintf(fout, "%d %s %f %d\n", readStudentBlocks[j].records[i].studentID, readStudentBlocks[j].records[i].name, readStudentBlocks[j].records[i].score, readStudentBlocks[j].records[i].advisorID);
 					}
-
 				}
 			}
-
 		}
 		else if (type == "Professors") {
 
@@ -618,20 +598,20 @@ void exactSearch(Directory directory, int key, int hashMapSize, string type) {
 				for (int i = 0; i < numOfProfessorRecords; i++) {
 
 					if (readProfessorBlocks[j].records[i].professorID == it->first) {
-						cout << readProfessorBlocks[j].records[i].name << " " << readProfessorBlocks[j].records[i].professorID << " "
-							<< readProfessorBlocks[j].records[i].salary << endl;
+						cout << readProfessorBlocks[j].records[i].name << " " << readProfessorBlocks[j].records[i].professorID << " " << readProfessorBlocks[j].records[i].salary << endl;
+						fprintf(fout, "%d %s %d\n", readProfessorBlocks[j].records[i].professorID, readProfessorBlocks[j].records[i].name, readProfessorBlocks[j].records[i].salary);
 					}
-
 				}
 			}
-
 		}
 	}
-
 }
 
 
-//인덱스파일
+/*------------------------------------------------------------------------------------------------------------------------------------*/
+/*                                                       Range Search                                                                 */
+/*------------------------------------------------------------------------------------------------------------------------------------*/
+
 void rangeSearch(Node*& root, float fromKey, float toKey, string type)
 {
 	FILE * fout = fopen("query.res", "a");
@@ -709,12 +689,15 @@ void rangeSearch(Node*& root, float fromKey, float toKey, string type)
 		}
 		thisNode = thisNode->node.leafNode.next;
 	}
-
 }
 
 
-void join() {
+/*------------------------------------------------------------------------------------------------------------------------------------*/
+/*                                          Block Oriented Nested Join Operation                                                      */
+/*------------------------------------------------------------------------------------------------------------------------------------*/
 
+void join() {
+	/* Algorithm */
 	// for each block br of f do
 	// get blocck br
 	// for each block bs of s do
@@ -722,41 +705,42 @@ void join() {
 
 	// for each tuple tr in br do
 	// for each tuple ts in bs do
-			//check it (tr, ts) satisfy the join condition
-			//if they do, add tr*ts to the result
+	// check it (tr, ts) satisfy the join condition
+	// if they do, add tr*ts to the result
+	// end end end end
 
 	JoinBlock * joinBlock = new JoinBlock();
 	FILE * fp1 = fopen("query.res", "a");
 	fseek(fp1, 0, SEEK_SET);
 
-	int numofstudentblock = 0;
-	int numofprofessorblock = 0;
+	int numOfStudentBlock = 0;
+	int numOfProfessorBlock = 0;
 
 	FILE * fps = fopen("Students.DB", "rb");
 
 	fseek(fps, 0, SEEK_END);
-	numofstudentblock = ftell(fps) / sizeof(StudentBlock);
+	numOfStudentBlock = ftell(fps) / sizeof(StudentBlock);
 
 	fseek(fps, 0, SEEK_SET);
 
 	FILE * fpp = fopen("Professors.DB", "rb");
 
 	fseek(fpp, 0, SEEK_END);
-	numofprofessorblock = ftell(fpp) / sizeof(ProfessorBlock);
+	numOfProfessorBlock = ftell(fpp) / sizeof(ProfessorBlock);
 
 	fseek(fpp, 0, SEEK_SET);
 
-	for (int s = 0; s < numofstudentblock; s++) {
+	for (int s = 0; s < numOfStudentBlock; s++) {	// Student Block
 		StudentBlock * studentBlock = new StudentBlock();
 		fread(studentBlock, sizeof(StudentBlock), 1, fps);
 		fseek(fpp, 0, SEEK_SET);
 
-		for (int p = 0; p < numofprofessorblock; p++) {
+		for (int p = 0; p < numOfProfessorBlock; p++) {	// Professor Block
 			ProfessorBlock * professorBlock = new ProfessorBlock();
 			fread(professorBlock, sizeof(ProfessorBlock), 1, fpp);
 
-			for (int tus = 0; tus < sizeof(StudentBlock) / sizeof(Students); tus++) {
-				for (int tup = 0; tup < sizeof(ProfessorBlock) / sizeof(Professors); tup++) {
+			for (int tus = 0; tus < sizeof(StudentBlock) / sizeof(Students); tus++) {	// tuples of Student Block
+				for (int tup = 0; tup < sizeof(ProfessorBlock) / sizeof(Professors); tup++) {	// tuples of Professor Block
 
 					if (professorBlock->records[tup].professorID == 3 && studentBlock->records[tus].studentID == 31795)
 					{
@@ -773,17 +757,16 @@ void join() {
 
 						fprintf(fp1, "%d %s %f %d %s %d\n", joinBlock->studentID, joinBlock->studentName, joinBlock->score, joinBlock->advisorProfessorID, joinBlock->professorName, joinBlock->salary);
 					}
-
 				}
 			}
-
 		}
-
 	}
-
-
-
 }
+
+
+/*------------------------------------------------------------------------------------------------------------------------------------*/
+/*                                                          Query                                                                     */
+/*------------------------------------------------------------------------------------------------------------------------------------*/
 
 int getQueryData(string*& querySet) {
 
@@ -805,195 +788,9 @@ int getQueryData(string*& querySet) {
 }
 
 
-
-int main()
-{
-	int num;
-	initBPlusTree(studentRoot);
-	initBPlusTree(professorRoot);
-	initStack();
-
-	studentCnt = getStudentData(writeStudentBlocks, "student_data.csv");
-	professorCnt = getProfessorData(writeProfessorBlocks, "prof_data.csv");
-	insertStudentDB(writeStudentBlocks, studentCnt);
-	insertProfessorDB(writeProfessorBlocks, professorCnt);
-
-	string* querySet;
-	int queryCnt = getQueryData(querySet);
-
-	string buf;
-	Tokenizer tokenizer; //include "Tokenize.h"
-	tokenizer.setDelimiter(", "); //parsing Delimiter = ","
-
-
-	Directory studentDirectory(sizeof(Students)), professorDirectory(sizeof(Professors)); //hash directory initialization
-
-	FILE *readStudentDB = fopen("Students.DB", "rb");
-	fseek(readStudentDB, 0, SEEK_SET);
-	readStudentBlocks = new StudentBlock[studentCnt / numOfStudentRecords + 1];
-
-	fread((char*)readStudentBlocks, sizeof(StudentBlock), studentCnt / numOfStudentRecords + 1, readStudentDB);
-
-	FILE *readProfessorDB = fopen("Professors.DB", "rb");
-	fseek(readProfessorDB, 0, SEEK_SET);
-	readProfessorBlocks = new ProfessorBlock[professorCnt / numOfProfessorRecords + 2];
-
-	fread((char*)readProfessorBlocks, sizeof(ProfessorBlock), professorCnt / numOfProfessorRecords + 2, readProfessorDB);
-
-
-	//studentID is key of Hash
-	//insert key value into hash table
-	for (int j = 0; j < studentCnt / numOfStudentRecords + 1; j++) {
-		for (int i = 0; i < numOfStudentRecords; i++) {
-			int hashRes = studentDirectory.hash(readStudentBlocks[j].records[i].studentID);
-			studentDirectory.insert(readStudentBlocks[j].records[i].studentID, hashRes, 0);
-		}
-	}
-
-
-
-
-	//professorID is key of Hash
-	//insert key value into hash table
-	for (int j = 0; j < professorCnt / numOfProfessorRecords + 1; j++) {
-		for (int i = 0; i < numOfProfessorRecords; i++) {
-			professorDirectory.insert(readProfessorBlocks[j].records[i].professorID, professorDirectory.hash(readProfessorBlocks[j].records[i].professorID), 0);
-		}
-	}
-
-
-	//make Students.hash
-	FILE *studentHashFile = fopen("Students.hash", "wb");
-	if (studentDirectory.writeHashFile(studentHashFile, SHOW_DUPLICATE_BUCKETS) == -1)
-		cout << "students.hash file error." << endl;
-
-
-
-	//make Professor.hash
-	FILE *professorHashFile = fopen("Professors.hash", "wb");
-	if (professorDirectory.writeHashFile(professorHashFile, SHOW_DUPLICATE_BUCKETS) == -1)
-		cout << "professor.hash file error." << endl;
-
-
-	//score is the key of B+tree
-	//insert <key, value> into index
-	for (int j = 0; j < studentCnt / numOfStudentRecords + 1; j++) {
-		for (int i = 0; i < numOfStudentRecords; i++) {
-			InsertKey(readStudentBlocks[j].records[i].score, j, studentRoot);
-		}
-	}
-
-
-
-	//salary is the key of B+tree
-	//insert <key, value> into index
-	for (int j = 0; j < professorCnt / numOfProfessorRecords + 2; j++) {
-		for (int i = 0; i < numOfProfessorRecords; i++) {
-			InsertKey(readProfessorBlocks[j].records[i].salary, j, professorRoot);
-		}
-	}
-
-
-
-	//make Students.idx
-	FILE *studentIndexFile = fopen("Students_score.idx", "wb");
-	if (writeStudentIndexFile(studentIndexFile) == -1)
-		cout << "Students.idx file error." << endl;
-
-
-
-	//make Professors.idx
-	FILE *professorIndexFile = fopen("Professor_salary.idx", "wb");
-	if (writeProfessorIndexFile(professorIndexFile) == -1)
-		cout << "Professor.idx file error." << endl;
-
-	HashMap* readStudentHashMap = new HashMap[studentCnt];
-	HashMap* readProfessorHashMap = new HashMap[professorCnt];
-	Node* readStudentScoreIdx = new Node[DEGREE];
-	Node* readProfessorSalaryIdx = new Node[DEGREE];
-
-	
-	while (1) {
-	cout << "Select your operation\n 1.Show Students.hash\n 2.Show all the leaves of Students_score.idx\n 3.Show Stuents.DB\n"
-	<< " 4.Show Professors.hash\n 5.Show all the leaves of professor_salary.idx\n 6.Show Professor.DB\n 7.Read Query File\n 8.exit..\n>>>>>>";
-	cin >> num;
-	switch (num) {
-
-	case 1:
-	//read values from Students.hash
-	readStudentHashFile(readStudentHashMap, studentCnt);
-	break;
-	case 2:
-	readStudentIndexFile(readStudentScoreIdx, DEGREE);
-	break;
-	case 3:
-	for (int j = 0; j < studentCnt / numOfStudentRecords + 1; j++) {
-	for (int i = 0; i < numOfStudentRecords; i++) {
-	if (strcmp(readStudentBlocks[j].records[i].name, ""))
-	cout << readStudentBlocks[j].records[i].name << " " << readStudentBlocks[j].records[i].studentID << " "
-	<< readStudentBlocks[j].records[i].score << " " << readStudentBlocks[j].records[i].advisorID << endl;
-	}
-	}
-	break;
-
-	case 4:
-	//read values from Students.hash
-	readProfessorHashFile(readProfessorHashMap, professorCnt);
-	break;
-
-	case 5:
-	readProfessorIndexFile(readProfessorSalaryIdx, DEGREE);
-	break;
-	case 6:
-	for (int j = 0; j < professorCnt / numOfProfessorRecords + 1; j++) {
-	for (int i = 0; i < numOfProfessorRecords; i++) {
-	if (strcmp(readProfessorBlocks[j].records[i].name, ""))
-	cout << readProfessorBlocks[j].records[i].name << " " << readProfessorBlocks[j].records[i].professorID << " "
-	<< readProfessorBlocks[j].records[i].salary << endl;
-	}
-	}
-	break;
-	case 7:
-	for (int i = 0; i < queryCnt; i++) {
-		tokenizer.setString(querySet[i]);
-		if (tokenizer.next() == "Search-Exact") {
-			string type = tokenizer.next();
-			tokenizer.next();
-			if (type == "Students") {
-				exactSearch(studentDirectory, atoi(tokenizer.next().c_str()), studentCnt, "Students");
-			}
-			else if (type == "Professors") {
-				exactSearch(professorDirectory, atoi(tokenizer.next().c_str()), professorCnt, "Professors");
-			}
-		}
-		else if (tokenizer.next() == "Search-Range") {
-			string type = tokenizer.next();
-			tokenizer.next();
-			if (type == "Students") {
-				rangeSearch(studentRoot, atoi(tokenizer.next().c_str()), atoi(tokenizer.next().c_str()), "Students");
-			}
-			else if (type == "Professors") {
-				rangeSearch(professorRoot, atoi(tokenizer.next().c_str()), atoi(tokenizer.next().c_str()), "Professors");
-			}
-		}
-		else if (tokenizer.next() == "Join") {
-
-		}
-	}
-	break;
-	case 8:
-	return 0;
-	break;
-	default:
-	cout << "Not valid operation number!\n";
-	}
-
-	cout << endl;
-	}
-	*/
-	system("pause");
-	return 0;
-}
+/*------------------------------------------------------------------------------------------------------------------------------------*/
+/*                                                          B+ tree                                                                   */
+/*------------------------------------------------------------------------------------------------------------------------------------*/
 
 void traverse(Node*& root)
 {
@@ -1038,6 +835,7 @@ void traverse(Node*& p, int depth)
 	}
 }
 
+
 void SelectKey(float selectKey)
 {
 	Node *thisNode;
@@ -1056,12 +854,13 @@ void SelectKey(float selectKey)
 			printf("Data = %d\n", thisNode->node.leafNode.data[i]);
 		}
 }
+
+
 void InsertKey4(Node *preNode, Node *nextNode, float addkey, Node *thisNode, Node *root)
 {
 	/*
 	InsertKey4 함수
 	분할이 이루어지는 노드가 인덱스 노드 일 때 사용
-
 	Node *preNode : 키 앞쪽에 추가할 포인터
 	Node *nextNode : 키 뒤쪽에 추가할 포인터
 	int addKey  : 키 번호
@@ -1142,12 +941,13 @@ void InsertKey4(Node *preNode, Node *nextNode, float addkey, Node *thisNode, Nod
 		// 부모 노드가 있다면 InsertKey3 를 실행
 		InsertKey3(thisNode, addNode, tempKey[DEGREE / 2], thisNode->parent, root);
 }
+
+
 void InsertKey3(Node *preNode, Node *nextNode, float addkey, Node *thisNode, Node *root)
 {
 	/*
 	InsertKey3 함수
 	인덱스 노드 이고 노드에 빈공간이 있을 때 사용
-
 	Node *preNode : 키 앞쪽에 추가할 포인터
 	Node *nextNode : 키 뒤쪽에 추가할 포인터
 	int addKey  : 키 번호
@@ -1185,12 +985,13 @@ void InsertKey3(Node *preNode, Node *nextNode, float addkey, Node *thisNode, Nod
 	// 추가 한 뒤 노드가 가득 차있는지 확인
 	if (thisNode->node.indexNode.key[DEGREE - 2] != 0) thisNode->full = FULL;
 }
+
+
 void InsertKey2(float insertKey, int insertData, Node *thisNode, Node *root)
 {
 	/*
 	InsertKey2 함수
 	리프노드이고 분할 할 때 사용
-
 	int insertKey  : 추가할 키
 	int insertData  : 추가할 데이터
 	Node *thisNode  : 분할 될 노드
@@ -1246,12 +1047,13 @@ void InsertKey2(float insertKey, int insertData, Node *thisNode, Node *root)
 		// 부모 노드가 있다면 InsertKey3 를 실행
 		InsertKey3(thisNode, addNode, thisNode->node.leafNode.key[DEGREE / 2], thisNode->parent, root);
 }
+
+
 void InsertKey1(float insertKey, int insertData, Node *thisNode, Node *root)
 {
 	/*
 	InsertKey1 함수
 	리프노드이고 노드에 빈공간이 있어서 그냥 추가할 때 사용
-
 	int insertKey : 추가할 키
 	int insertData : 추가할 데이터
 	Node *thisNode : 어떤 리프 노드에 추가할 것인지
@@ -1293,12 +1095,16 @@ void InsertKey1(float insertKey, int insertData, Node *thisNode, Node *root)
 	// 추가 한 뒤 노드가 가득 차있는지 확인
 	if (thisNode->node.leafNode.key[DEGREE - 1] != 0) thisNode->full = FULL;
 }
+
+
 void InsertKey(float key, int data, Node *root)
 {
 	//키 값은 0이 될 수 없음 0은 비어있는 키로 사용하기 때문
 	if (key == 0) return;
 	InsertKey1(key, data, FindKey(key, 0, root), root);
 }
+
+
 void initStack()
 {
 	// 스택 초기화
@@ -1307,345 +1113,9 @@ void initStack()
 		Stack[i] = NULL;
 	StackPoint = 0;
 }
-void DeleteKey2(Node *thisNode)
-{
-	/*
-	DeleteKey2 함수
-	인덱스 노드의 재분배 및 병합하는 함수
 
-	Node *thisNode : 재 분할 및 병합을 해야하는 노드
-	*/
-	int i, j, k;
-	int thisPoint;
-	Node *parent;
-	Node *broNode;
-	Node *tempNode;
-	// 현재 노드가 인덱스 노드가 아니라면 종료
-	if (thisNode->type != INDEX) return;
-	// 부모노드 설정
-	parent = thisNode->parent;
-	// 현재 노드가 루트이면 종료
-	if (parent == NULL) return;
-	// 현재 노드가 부모 노드의 몇번째 서브트리 인지 확인
-	for (thisPoint = 0; thisPoint < DEGREE - 1; thisPoint++)
-		if (parent->node.indexNode.pointer[thisPoint] == thisNode) break;
-	// 현재노드가 부모 노드의 0번째 인덱스가 아닐 때 
-	broNode = (thisPoint != 0) ? parent->node.indexNode.pointer[thisPoint - 1] : parent->node.indexNode.pointer[thisPoint + 1];
-	// 형재 노드에 서브트리 수를 확인한다.
-	for (i = 0; i < DEGREE; i++)
-		if (broNode->node.indexNode.pointer[i] == NULL) break;
-	// 만약 형재 노드가 현재 노드에게 서브트리 를 줄때 50% 이상이 유지가 안될경우 병합을 한다.
-	if ((DEGREE % 2 == 0 && DEGREE / 2 >= i) || (DEGREE % 2 == 1 && DEGREE / 2 + 1 >= i)) // 병합
-	{
-		// thisPoint == 0 일 때 broNode 와 thisNode 포인터를 교체한다.
-		if (thisPoint == 0)
-		{
-			tempNode = thisNode;
-			thisNode = broNode;
-			broNode = tempNode;
-		}
-		else
-		{
-			thisPoint--;
-		}
-		// 추가할 곳의 포인터를 찾음
-		for (j = 0; j < DEGREE; j++)
-			if (broNode->node.indexNode.pointer[j] == NULL) break;
-		broNode->node.indexNode.key[j - 1] = parent->node.indexNode.key[thisPoint];
 
-		// thisNode 의 포인터를 broNode 노드로 옮김
-		for (i = j, k = 0; i < DEGREE; i++, k++)
-		{
-			broNode->node.indexNode.pointer[i] = thisNode->node.indexNode.pointer[k];
-			broNode->node.indexNode.pointer[i]->parent = broNode;
-		}
-		// thisNode 의 키를 broNode 노드로 옮김
-		for (i = j, k = 0; i < DEGREE - 1; i++, k++)
-			broNode->node.indexNode.key[i] = thisNode->node.indexNode.key[k];
-		broNode->full = FULL;
-		for (i = thisPoint + 1; i < DEGREE - 1; i++)
-			parent->node.indexNode.pointer[i] = parent->node.indexNode.pointer[i + 1];
-
-		parent->node.indexNode.pointer[i] = NULL;
-
-		for (i = thisPoint; i < DEGREE - 2; i++)
-			parent->node.indexNode.key[i] = parent->node.indexNode.key[i + 1];
-		parent->node.indexNode.key[i] = 0;
-		parent->full = 0;
-		free(thisNode);
-		// 서브 트리의 조건이 만족하는지 확인 M차 수일때 최소 50% 이상 서브트리 가지고 있어야함
-		for (i = 0; i < DEGREE; i++)
-			if (parent->node.indexNode.pointer[i] == NULL) break;
-		// 부모노드가 root 이고 서브트리가 하나 밖에 없다면 index 노드가 필요 없음
-		if (parent == root)
-		{
-			if ((i == 1))
-			{
-				root = parent->node.indexNode.pointer[0];
-				root->parent = NULL;
-				free(parent);
-			}
-			return;
-		}
-		// 차수가 짝수이고 50% 이상 유지 이거나 차수가 홀수이고 66% 이상 유지 되면 종료
-		if ((DEGREE % 2 == 0 && DEGREE / 2 <= i) || (DEGREE % 2 == 1 && DEGREE / 2 + 1 <= i)) return;
-		//50%가 유지가 안되면
-		DeleteKey2(parent);
-	}
-	else // 재분배
-	{
-		if (thisPoint == 0)
-		{
-			// 키가 0인 곳을 찾아서 key 값을 설정한다.
-			for (i = 0; i < DEGREE; i++)
-			{
-				if (thisNode->node.indexNode.key[i] == 0)
-				{
-					thisNode->node.indexNode.key[i] = parent->node.indexNode.key[thisPoint];
-					break;
-				}
-			}
-			// broNode 에서 부터 값하나를 받아 온다.
-			thisNode->node.indexNode.pointer[i + 1] = broNode->node.indexNode.pointer[0];
-			thisNode->node.indexNode.pointer[i + 1]->parent = thisNode;
-			parent->node.indexNode.key[thisPoint] = broNode->node.indexNode.key[0];
-			broNode->full = 0;
-			// broNode를 정렬한다.
-			for (j = 0; j < DEGREE - 2; j++)
-			{
-				broNode->node.indexNode.key[j] = broNode->node.indexNode.key[j + 1];
-				broNode->node.indexNode.pointer[j] = broNode->node.indexNode.pointer[j + 1];
-			}
-			broNode->node.indexNode.key[j] = 0;
-			broNode->node.indexNode.pointer[j] = broNode->node.indexNode.pointer[j + 1];
-			broNode->node.indexNode.pointer[j + 1] = NULL;
-		}
-		else
-		{
-			// 형제 노드에 마지막 Key 위치를 확인한다.
-			for (i = 0; i < DEGREE; i++)
-				if (broNode->node.indexNode.pointer[i] == NULL) break;
-			i--;
-			// thisNode를 정렬한다.
-			for (j = DEGREE - 1; j > 0; j--)
-				thisNode->node.indexNode.pointer[j] = thisNode->node.indexNode.pointer[j - 1];
-			for (j = DEGREE - 2; j > 0; j--)
-				thisNode->node.indexNode.key[j] = thisNode->node.indexNode.key[j - 1];
-
-			// broNode에서 값을 받아온다.
-			thisNode->node.indexNode.pointer[0] = broNode->node.indexNode.pointer[i];
-			thisNode->node.indexNode.pointer[0]->parent = thisNode;
-
-			broNode->node.indexNode.pointer[i] = NULL;
-			thisNode->node.indexNode.key[0] = parent->node.indexNode.key[thisPoint - 1];
-
-			parent->node.indexNode.key[thisPoint - 1] = broNode->node.indexNode.key[i - 1];
-
-			broNode->node.indexNode.key[i - 1] = 0;
-			broNode->full = 0;
-		}
-	}
-}
-void DeleteKey1(Node *thisNode)
-{
-	/*
-	DeleteKey1 함수
-	리프 노드의 재분배 및 병합하는 함수
-
-	Node *thisNode : 재 분할 및 병합을 해야하는 노드
-	*/
-	int i, j;
-	int thisPoint;
-	Node *parent;
-	Node *broNode;
-	Node *tempNode;
-	// 현재 노드가 리프노드가 아니라면 중지
-	if (thisNode->type != LEAF) return;
-	// 부모 노드를 설정
-	parent = thisNode->parent;
-	// 현재 리프노드가 루트이면 종료
-	if (parent == NULL) return;
-	// 현재 노드가 부모 노드의 몇번째 서브트리 인지 확인
-	for (thisPoint = 0; thisPoint < DEGREE - 1; thisPoint++)
-		if (parent->node.indexNode.pointer[thisPoint] == thisNode) break;
-	/*
-	현재노드가 부모 노드의
-	0번째 서브트리가 아니면 왼쪽 서브트리와 재분배 및 병합
-	0번째 서브트리면 오른쪽 서브트리와 재분배 및 병합
-	선택된 서브트리를 형제노드라고 한다.
-	*/
-	broNode = (thisPoint != 0) ? parent->node.indexNode.pointer[thisPoint - 1] : parent->node.indexNode.pointer[thisPoint + 1];
-	// 형제노드에 Key 수를 확인한다.
-	for (i = 0; i < DEGREE; i++)
-		if (broNode->node.leafNode.key[i] == 0) break;
-	// 만약 형제노드와 재분재를 했을경우 50% 이상이 안될 때 병합을 한다.
-	if ((DEGREE % 2 == 0 && DEGREE / 2 >= i) || (DEGREE % 2 == 1 && DEGREE / 2 + 1 >= i)) // 병합
-	{
-		/*
-		현재노드가 0번째 서브트리면 broNode와 thisNode 이름을 바꾼다.
-		이는 병합할 때 노드를 하나 버려야되는데 이 때 오른쪽에 있는 노드를 버린다.
-		왼쪽에 있는 노드를 버릴경우 리프노드끼리 연결된 포인터들이 복잡해진다.
-		따라서 이름을 그대로 사용할 경우 오른쪽 노드가 버려지기 때문에 이름을 바꾼다.
-		thisPoint 는 broNode를 가리키는 인덱스로써 사용한다.
-		*/
-		if (thisPoint == 0)
-		{
-			tempNode = thisNode;
-			thisNode = broNode;
-			broNode = tempNode;
-		}
-		else
-			thisPoint--;
-		// thisNode는 버려지기 때문에 다음 리프노드 포인터를 broNode에 설정한다.
-		broNode->node.leafNode.next = thisNode->node.leafNode.next;
-		// thisNode 가 가지고 있는 Key 와 Data 를 broNode 로 옮긴다.
-		for (j = 0; j < DEGREE; j++)
-		{
-			// thisNode가 가지고 있는 정보가 더이상 없으면 빠져나간다.
-			if (thisNode->node.leafNode.key[j] == 0) break;
-			// 현재 가리키고있는 Key 와 Data 를 broNode로 옮긴다.
-			InsertKey1(thisNode->node.leafNode.key[j], thisNode->node.leafNode.data[j], broNode, root);
-		}
-		// 병합을 하게되면 그 노드는 항상 FULL 상태가 된다.
-		broNode->full = FULL;
-		// thisNode의 포인터를 제거하기 위해 부모노드를 정렬한다.
-		for (i = thisPoint + 1; i < DEGREE - 1; i++)
-			parent->node.indexNode.pointer[i] = parent->node.indexNode.pointer[i + 1];
-
-		parent->node.indexNode.pointer[i] = NULL;
-		for (i = thisPoint; i < DEGREE - 2; i++)
-			parent->node.indexNode.key[i] = parent->node.indexNode.key[i + 1];
-		parent->node.indexNode.key[i] = 0;
-		// 제거 되었기 때문에 항상 부모노드는 FULL 상태가 아니게된다.
-		parent->full = 0;
-		// thisNode를 제거한다.
-		free(thisNode);
-		// 인덱스노드가 몇개의 서브트리를 가지고 있는지 확인한다.
-		for (i = 0; i < DEGREE; i++)
-			if (parent->node.indexNode.pointer[i] == NULL) break;
-		// 인덱스노드가 root 이고 서브트리가 하나 밖에 없다면 index 노드가 필요 없음
-		if (parent == root)
-		{
-			if ((i == 1))
-			{
-				root = parent->node.indexNode.pointer[0];
-				root->parent = NULL;
-				free(parent);
-			}
-			return;
-		}
-		// 차수가 짝수이고 50% 이상 유지 이거나 차수가 홀수이고 66% 이상 유지 되면 종료
-		if ((DEGREE % 2 == 0 && DEGREE / 2 <= i) || (DEGREE % 2 == 1 && DEGREE / 2 + 1 <= i)) return;
-		//50%가 유지가 안되면
-		DeleteKey2(parent);
-	}
-	else // 재분배
-	{
-		/*
-		서브트리가 0일때는 오른쪽과 재분배를
-		0이 아닐때는 왼쪽과 재분배를 해야하기 때문에 나눔
-		또한 재분배는 부모 인덱스노드의 서브트리 수를 바꾸지 않기 때문에
-		인덱스노드의 50%조건을 검사하지 않아도 됨
-		*/
-		if (thisPoint == 0)
-		{
-			/*
-			오른쪽에 있는 형제노드에서 값 하나를 가져온다.
-			하나만 가져오는 이유는 삭제 되는 값이 하나씩 이루어지기 때문에
-			50%가 유지가 안된다면 그것은 하나가 부족한 것이다.
-			*/
-			InsertKey1(broNode->node.leafNode.key[0], broNode->node.leafNode.data[0], thisNode, root);
-			/*
-			부모노드의 인덱스를 형제노드에서 가져온 값으로 변경한다.
-			현재노드보다 형제노드가 오른쪽에 있기 때문에
-			무조건 형제노드에서 가져온 값이 크기 때문이다.
-			*/
-			parent->node.indexNode.key[thisPoint] = broNode->node.leafNode.key[0];
-			// 형제노드를 정렬한다.
-			for (i = 0; i < DEGREE - 1; i++)
-			{
-				broNode->node.leafNode.key[i] = broNode->node.leafNode.key[i + 1];
-				broNode->node.leafNode.data[i] = broNode->node.leafNode.data[i + 1];
-			}
-			broNode->node.leafNode.key[i] = 0;
-			broNode->node.leafNode.data[i] = 0;
-			// 하나가 제거되었기 때문에 무조건 FULL 상태가 아니다.
-			broNode->full = 0;
-		}
-		else
-		{
-			// 왼쪽에 형제노드이므로 형제 노드에서 가져올 마지막 값을 검색한다.
-			for (i = 0; i < DEGREE; i++)
-				if (broNode->node.leafNode.key[i] == 0) break;
-			i--;
-			// 검색된 Key 와 Data 를 현재노드에 추가 시킨다.
-			InsertKey1(broNode->node.leafNode.key[i], broNode->node.leafNode.data[i], thisNode, root);
-			// 가져온 Key 와 Data 를 삭제하고 무조건 FULL 상태가 아님
-			broNode->node.leafNode.key[i] = 0;
-			broNode->node.leafNode.data[i] = 0;
-			broNode->full = 0;
-			// 형제노드를 가리키는 인덱스를 바꾸어준다.
-			parent->node.indexNode.key[thisPoint - 1] = broNode->node.leafNode.key[i - 1];
-		}
-	}
-}
-void DeleteKey(float deleteKey)
-{
-	/*
-	DeleteKey 함수
-	트리 에서 현재 키를 삭제 한다.
-	삭제후 그 노드가 50%이상 유지가 되지 않는다면 DeleteKey1 을 실행한다.
-	int deleteKey : 삭제할 키
-	*/
-	int i, j;
-	Node *thisNode;
-	// 존재하지 않는 키라면 삭제 할 수 없음
-	if ((thisNode = FindKey(deleteKey, 1, root)) == NULL) return;
-	// key 값과 같은 Key 가 어느 위치에 있는지 확인
-	for (i = 0; i < DEGREE; i++)
-		if (fabsf(thisNode->node.leafNode.key[i] - deleteKey) < EPS) break;
-	// 그 곳에 있는 Key 를 삭제
-	thisNode->node.leafNode.key[i] = 0;
-	thisNode->node.leafNode.data[i] = 0;
-
-	// 비워 있는 곳을 메꾸기 위해 다시 정렬
-	for (j = i; j < DEGREE - 1; j++)
-	{
-		thisNode->node.leafNode.key[j] = thisNode->node.leafNode.key[j + 1];
-		thisNode->node.leafNode.data[j] = thisNode->node.leafNode.data[j + 1];
-	}
-	thisNode->node.leafNode.key[j] = 0;
-	thisNode->node.leafNode.data[j] = 0;
-	//지웠다면 그 상태는 무조건 FULL 이 아님
-	thisNode->full = 0;
-	// 현재 Key 가 어느정도 있는지 확인
-	for (i = 0; i < DEGREE; i++)
-		if (thisNode->node.leafNode.key[i] == 0) break;
-	// 차수가 짝수이고 50% 이상 유지, 차수가 홀수이고 66% 이상 유지 되면 종료
-	if ((DEGREE % 2 == 0 && DEGREE / 2 <= i) || (DEGREE % 2 == 1 && DEGREE / 2 + 1 <= i)) return;
-	//50%가 유지가 안되면 DeleteKey1 을 이용하여 재분배 및 병합 실행
-	DeleteKey1(thisNode);
-}
-void initBPlusTree()
-{
-	/*
-	3 미만으로 하게 되면 삽입과정중
-	루트가 아닌 인덱스노드의 서브트리 개수가 1개가 될 경우가 있음
-	따라서 조건이 맞지 않음
-	*/
-
-	if (DEGREE < 3)
-	{
-		printf("차수가 3미만이 될수 없습니다.\n");
-		exit(1);
-	}
-
-	// 루트 생성 및 초기화
-	root = (Node *)malloc(sizeof(Node));
-	memset((char *)root, 0, sizeof(Node));
-	root->type = LEAF;
-}
-void initBPlusTree2()
+void initBPlusTree(Node*& node)
 {
 	/*
 	3 미만으로 하게 되면 삽입과정중
@@ -1664,6 +1134,8 @@ void initBPlusTree2()
 	memset((char *)node, 0, sizeof(Node));
 	node->type = LEAF;
 }
+
+
 void addStack(Node *thisNode)
 {
 	// 스택이 가득찼다면 종료
@@ -1674,11 +1146,14 @@ void addStack(Node *thisNode)
 	}
 	Stack[StackPoint++] = thisNode;
 }
+
 Node *getStack()
 {
 	// 스택이 비어있다면 종료
 	return (StackPoint == 0) ? NULL : Stack[--StackPoint];
 }
+
+
 Node *FindKey(float AddKey, int inverse, Node *thisNode)
 {
 	/*
@@ -1712,4 +1187,199 @@ Node *FindKey(float AddKey, int inverse, Node *thisNode)
 			return (inverse == 0) ? thisNode : NULL;
 		}
 	}
+}
+
+
+/*------------------------------------------------------------------------------------------------------------------------------------*/
+/*                                                           Main                                                                     */
+/*------------------------------------------------------------------------------------------------------------------------------------*/
+
+int main()
+{
+	int num;
+	initBPlusTree(studentRoot);
+	initBPlusTree(professorRoot);
+	initStack();
+
+	studentCnt = getStudentData(writeStudentBlocks, "student_data2.csv");
+	professorCnt = getProfessorData(writeProfessorBlocks, "prof_data2.csv");
+	insertStudentDB(writeStudentBlocks, studentCnt);
+	insertProfessorDB(writeProfessorBlocks, professorCnt);
+
+	string* querySet;
+	int queryCnt = getQueryData(querySet);
+
+	string buf;
+	Tokenizer tokenizer; //include "Tokenize.h"
+	tokenizer.setDelimiter(", "); //parsing Delimiter = ","
+
+
+	Directory studentDirectory(sizeof(Students)), professorDirectory(sizeof(Professors)); //hash directory initialization
+
+	FILE *readStudentDB = fopen("Students.DB", "rb");
+	fseek(readStudentDB, 0, SEEK_SET);
+	readStudentBlocks = new StudentBlock[studentCnt / numOfStudentRecords + 1];
+
+	fread((char*)readStudentBlocks, sizeof(StudentBlock), studentCnt / numOfStudentRecords + 1, readStudentDB);
+
+	FILE *readProfessorDB = fopen("Professors.DB", "rb");
+	fseek(readProfessorDB, 0, SEEK_SET);
+	readProfessorBlocks = new ProfessorBlock[professorCnt / numOfProfessorRecords + 2];
+
+	fread((char*)readProfessorBlocks, sizeof(ProfessorBlock), professorCnt / numOfProfessorRecords + 2, readProfessorDB);
+
+
+	//studentID is key of Hash
+	//insert key value into hash table
+	for (int j = 0; j < studentCnt / numOfStudentRecords + 1; j++) {
+		for (int i = 0; i < numOfStudentRecords; i++) {
+			int hashRes = studentDirectory.hash(readStudentBlocks[j].records[i].studentID);
+			studentDirectory.insert(readStudentBlocks[j].records[i].studentID, hashRes, 0);
+		}
+	}
+
+	//professorID is key of Hash
+	//insert key value into hash table
+	for (int j = 0; j < professorCnt / numOfProfessorRecords + 1; j++) {
+		for (int i = 0; i < numOfProfessorRecords; i++) {
+			professorDirectory.insert(readProfessorBlocks[j].records[i].professorID, professorDirectory.hash(readProfessorBlocks[j].records[i].professorID), 0);
+		}
+	}
+
+	//make Students.hash
+	FILE *studentHashFile = fopen("Students.hash", "wb");
+	if (studentDirectory.writeHashFile(studentHashFile, SHOW_DUPLICATE_BUCKETS) == -1)
+		cout << "students.hash file error." << endl;
+
+	//make Professor.hash
+	FILE *professorHashFile = fopen("Professors.hash", "wb");
+	if (professorDirectory.writeHashFile(professorHashFile, SHOW_DUPLICATE_BUCKETS) == -1)
+		cout << "professor.hash file error." << endl;
+
+	//score is the key of B+tree
+	//insert <key, value> into index
+	for (int j = 0; j < studentCnt / numOfStudentRecords + 1; j++) {
+		for (int i = 0; i < numOfStudentRecords; i++) {
+			InsertKey(readStudentBlocks[j].records[i].score, j, studentRoot);
+		}
+	}
+
+	//salary is the key of B+tree
+	//insert <key, value> into index
+	for (int j = 0; j < professorCnt / numOfProfessorRecords + 2; j++) {
+		for (int i = 0; i < numOfProfessorRecords; i++) {
+			InsertKey(readProfessorBlocks[j].records[i].salary, j, professorRoot);
+		}
+	}
+
+	//make Students.idx
+	FILE *studentIndexFile = fopen("Students_score.idx", "wb");
+	if (writeStudentIndexFile(studentIndexFile) == -1)
+		cout << "Students.idx file error." << endl;
+
+	//make Professors.idx
+	FILE *professorIndexFile = fopen("Professor_salary.idx", "wb");
+	if (writeProfessorIndexFile(professorIndexFile) == -1)
+		cout << "Professor.idx file error." << endl;
+
+	HashMap* readStudentHashMap = new HashMap[studentCnt];
+	HashMap* readProfessorHashMap = new HashMap[professorCnt];
+	Node* readStudentScoreIdx = new Node[DEGREE];
+	Node* readProfessorSalaryIdx = new Node[DEGREE];
+
+	/* How to use */
+	// exactSearch(studentDirectory, 15530, studentCnt, "Students");
+	// rangeSearch(professorRoot, 100041.0, 100500.0, "Professors");
+	// join();
+
+	while (1) {
+		cout << "Select your operation\n 1.Show Students.hash\n 2.Show all the leaves of Students_score.idx\n 3.Show Stuents.DB\n"
+			<< " 4.Show Professors.hash\n 5.Show all the leaves of professor_salary.idx\n 6.Show Professor.DB\n 7.Read Query File\n 8.exit..\n>>>>>>";
+		cin >> num;
+		switch (num) {
+		case 1:
+			//read values from Students.hash
+			readStudentHashFile(readStudentHashMap, studentCnt);
+			break;
+		case 2:
+			readStudentIndexFile(readStudentScoreIdx, DEGREE);
+			break;
+		case 3:
+			for (int j = 0; j < studentCnt / numOfStudentRecords + 1; j++) {
+				for (int i = 0; i < numOfStudentRecords; i++) {
+					if (strcmp(readStudentBlocks[j].records[i].name, ""))
+						cout << readStudentBlocks[j].records[i].name << " " << readStudentBlocks[j].records[i].studentID << " "
+						<< readStudentBlocks[j].records[i].score << " " << readStudentBlocks[j].records[i].advisorID << endl;
+				}
+			}
+			break;
+		case 4:
+			//read values from Students.hash
+			readProfessorHashFile(readProfessorHashMap, professorCnt);
+			break;
+		case 5:
+			readProfessorIndexFile(readProfessorSalaryIdx, DEGREE);
+			break;
+		case 6:
+			for (int j = 0; j < professorCnt / numOfProfessorRecords + 1; j++) {
+				for (int i = 0; i < numOfProfessorRecords; i++) {
+					if (strcmp(readProfessorBlocks[j].records[i].name, ""))
+						cout << readProfessorBlocks[j].records[i].name << " " << readProfessorBlocks[j].records[i].professorID << " "
+						<< readProfessorBlocks[j].records[i].salary << endl;
+				}
+			}
+			break;
+
+			// 수술해야할 부분 시작 //
+		case 7:
+			for (int i = 0; i < queryCnt; i++) {
+				tokenizer.setString(querySet[i]);
+				string querytype = tokenizer.next();
+				if (querytype == "Search-Exact") {
+					printf("<Exact Match Search Operation>\n");
+					string type = tokenizer.next();
+					tokenizer.next();
+					if (type == "Students") {
+						string arg1 = tokenizer.next();
+						int arg = atoi(arg1.c_str());
+						exactSearch(studentDirectory, arg, studentCnt, "Students");
+					}
+					else if (type == "Professors") {
+						string arg1 = tokenizer.next();
+						int arg = atoi(arg1.c_str());
+						exactSearch(professorDirectory, arg, professorCnt, "Professors");
+					}
+					printf("\n");
+				}
+				else if (querytype == "Search-Range") {
+					printf("<Range Search Operation>\n");
+					string type = tokenizer.next();
+					tokenizer.next();
+					if (type == "Students") {
+						rangeSearch(studentRoot, atoi(tokenizer.next().c_str()), atoi(tokenizer.next().c_str()), "Students");
+					}
+					else if (type == "Professors") {
+						rangeSearch(professorRoot, atoi(tokenizer.next().c_str()), atoi(tokenizer.next().c_str()), "Professors");
+					}
+					printf("\n");
+				}
+				else if (querytype == "Join") {
+					printf("<Blck Oriented Nested Join Operation>\n");
+					join();
+					printf("\n");
+				}
+			}
+			break;
+			// 수술해야할 부분 끝 //
+
+		case 8:
+			return 0;
+			break;
+		default:
+			cout << "Not valid operation number!\n";
+		}
+		cout << endl;
+	}
+	system("pause");
+	return 0;
 }
